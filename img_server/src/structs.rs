@@ -1,4 +1,10 @@
 use serde::{Serialize, Deserialize};
+use std::collections::HashMap;
+
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+pub struct State {
+    pub images: HashMap<URI, Vec<u8>>,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ImgServerRequest {

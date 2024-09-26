@@ -1,17 +1,19 @@
-use std::collections::HashMap;
+use anyhow::Result;
 
-use kinode_process_lib::get_blob;
-use kinode_process_lib::http::server::send_response;
-use kinode_process_lib::http::server::HttpBindingConfig;
-use kinode_process_lib::http::server::HttpServer;
-use kinode_process_lib::http::StatusCode;
-use kinode_process_lib::logging::{error, info, warn, init_logging, Level};
-use kinode_process_lib::{await_message, call_init, kiprintln, Address, Message, Request, Response};
-use serde_json::Value;
+use kinode_process_lib::{
+    await_message, call_init, get_state, kiprintln,
+    logging::{error, info, init_logging, Level},
+    set_state, Address, Message, ProcessId,
+};
+use std::str::FromStr;
 
+pub mod helpers;
 pub mod structs;
+pub mod kino_msg_handlers;
 
+pub use helpers::*;
 pub use structs::*;
+pub use kino_msg_handlers::*;
 
 wit_bindgen::generate!({
     path: "target/wit",
@@ -20,74 +22,76 @@ wit_bindgen::generate!({
     additional_derives: [serde::Deserialize, serde::Serialize, process_macros::SerdeJsonInto],
 });
 
-fn handle_message(our: &Address, message: Message) -> anyhow::Result<()> {
+fn handle_message(_our: &Address, message: Message, state: &mut State) -> Result<()> {
     kiprintln!("Received a message");
-    // Send response right away so the mobile app can proceed
-    send_response(
-        StatusCode::OK,
-        Some(HashMap::from([(
-            String::from("Content-Type"),
-            String::from("application/json"),
-        )])),
-        vec![],
-    );
-    kiprintln!("Sent response");
+    helpers::send_immediate_response();
+
     match message {
-        Message::Request {
-            source,
-            expects_response,
-            body,
-            metadata,
-            capabilities,
-        } => {
-            kiprintln!("Decoding body1");
-            let decoded_body =
-                String::from_utf8(body).unwrap_or_else(|_| "Invalid UTF-8".to_string());
-
-            let json_body: Value = serde_json::from_str(&decoded_body)?;
-            kiprintln!("Decoded body");
-            let website = json_body["Http"]["headers"]["website"]
-                .as_str()
-                .unwrap_or("No website found");
-            kiprintln!("Website: {}", website);
-
-            let base64_image = if let Some(blob) = get_blob() {
-                let bytes = blob.bytes();
-                println!("Received blob: {:?} bytes", bytes.len());
-                Ok(base64::encode(&bytes))
-            } else {
-                Err(anyhow::anyhow!("Failed to get blob"))
-            };
-        }
-        Message::Response {
-            source,
-            body,
-            metadata,
-            context,
-            capabilities,
-        } => todo!(),
+        Message::Request { body, source, .. } => handle_request(body, &source, state),
+        Message::Response { .. } => todo!(),
     }
+}
+
+
+fn handle_request(body: Vec<u8>, source: &Address, state: &mut State) -> Result<()> {
+    let http_server_address = ProcessId::from_str("http_server:distro:sys")?;
+    if source.process.eq(&http_server_address) {
+        handle_http_server_request(state)
+    } else {
+        handle_kinode_request(&body, state)
+    }
+}
+
+// TODO: Zena: We need to move this to hq and forward it this kinode
+fn handle_http_server_request(state: &mut State) -> anyhow::Result<()> {
+    let jpeg_bytes = helpers::get_jpeg_bytes()?;
+    let hash_hex = helpers::calculate_sha256_hash(&jpeg_bytes);
+
+    kiprintln!("SHA-256 hash of JPEG: {}", hash_hex);
+    state.images.insert(hash_hex, jpeg_bytes);
+    save_state(state)?;
     Ok(())
 }
 
+fn handle_kinode_request(body: &[u8], state: &mut State) -> anyhow::Result<()> {
+    let request: ImgServerRequest = serde_json::from_slice(body)?;
+    match request {
+        ImgServerRequest::UploadImage(_upload_image_request) => Ok(()), // TODO: make this kinode msg
+        ImgServerRequest::GetImage(get_image_request) => handle_get_image_request(get_image_request, state),
+    }
+}
+
 call_init!(init);
+
 fn init(our: Address) {
     init_logging(&our, Level::DEBUG, Level::INFO, None).unwrap();
     kiprintln!("begin1");
-    let mut http_server = HttpServer::new(5);
-    let http_config = HttpBindingConfig::new(false, false, false, None);
-    match http_server.bind_http_path("/", http_config.clone()) {
-        Ok(_) => info!("Server started successfully"),
-        Err(e) => info!("Failed to start server: {}", e),
+
+    if let Err(e) = helpers::setup_http_server() {
+        info!("Failed to start server: {}", e);
     }
+
+    let mut state: State = if let Some(state) = get_state() {
+        if let Ok(state) = serde_json::from_slice::<State>(&state) {
+            kiprintln!("Successfully loaded state");
+            state
+        } else {
+            kiprintln!("Failed to deserialize state, using default");
+            State::default()
+        }
+    } else {
+        kiprintln!("No state found, using default");
+        State::default()
+    };
 
     loop {
         match await_message() {
             Err(send_error) => error!("got SendError: {send_error}"),
-            Ok(message) => match handle_message(&our, message) {
-                Ok(_) => {}
-                Err(e) => error!("got error while handling message: {e:?}"),
-            },
+            Ok(message) => {
+                if let Err(e) = handle_message(&our, message, &mut state) {
+                    error!("got error while handling message: {e:?}");
+                }
+            }
         }
     }
 }

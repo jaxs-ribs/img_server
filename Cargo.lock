@@ -1407,11 +1407,11 @@ name = "img_server"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "base64",
  "kinode_process_lib",
  "process_macros",
  "serde",
  "serde_json",
+ "sha2",
  "wit-bindgen",
 ]
 
