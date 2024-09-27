@@ -1,8 +1,10 @@
 use crate::State;
 use anyhow::Result;
+use std::collections::HashMap;
 use kinode_process_lib::{get_blob, kiprintln};
 use kinode_process_lib::{
-    http::server::{HttpBindingConfig, HttpServer},
+    http::StatusCode,
+    http::server::{HttpBindingConfig, HttpServer, send_response},
     logging::info, set_state,
 };
 use sha2::{Digest, Sha256};
@@ -12,19 +14,17 @@ pub fn save_state(state: &State) -> anyhow::Result<()> {
     Ok(())
 }
 
-pub fn send_immediate_response() {
-    use kinode_process_lib::http::{server::send_response, StatusCode};
-    use std::collections::HashMap;
-
+pub fn send_http_json_response<T: serde::Serialize>(status: StatusCode, data: &T) -> anyhow::Result<()> {
+    let json_data = serde_json::to_vec(data)?;
     send_response(
-        StatusCode::OK,
+        status,
         Some(HashMap::from([(
             String::from("Content-Type"),
             String::from("application/json"),
         )])),
-        vec![],
+        json_data,
     );
-    kiprintln!("Sent response");
+    Ok(())
 }
 
 pub fn get_jpeg_bytes() -> Result<Vec<u8>> {

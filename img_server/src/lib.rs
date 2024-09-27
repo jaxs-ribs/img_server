@@ -1,19 +1,21 @@
 use anyhow::Result;
 
 use kinode_process_lib::{
-    await_message, call_init, get_state, kiprintln,
+    await_message, call_init, get_state,
+    http::StatusCode,
+    kiprintln,
     logging::{error, info, init_logging, Level},
-    Address, Message, ProcessId,
+    Address, Message, ProcessId, Response,
 };
 use std::str::FromStr;
 
 pub mod helpers;
-pub mod structs;
 pub mod msg_handlers;
+pub mod structs;
 
 pub use helpers::*;
-pub use structs::*;
 pub use msg_handlers::*;
+pub use structs::*;
 
 wit_bindgen::generate!({
     path: "target/wit",
@@ -24,14 +26,12 @@ wit_bindgen::generate!({
 
 fn handle_message(_our: &Address, message: Message, state: &mut State) -> Result<()> {
     kiprintln!("Received a message");
-    helpers::send_immediate_response();
 
     match message {
         Message::Request { body, source, .. } => handle_request(body, &source, state),
         Message::Response { .. } => todo!(),
     }
 }
-
 
 fn handle_request(body: Vec<u8>, source: &Address, state: &mut State) -> Result<()> {
     let http_server_address = ProcessId::from_str("http_server:distro:sys")?;
@@ -44,37 +44,36 @@ fn handle_request(body: Vec<u8>, source: &Address, state: &mut State) -> Result<
 
 // TODO: Zena: We need to move this to hq and forward it this kinode
 fn handle_http_server_request(body: Vec<u8>, state: &mut State) -> anyhow::Result<()> {
-    if let Ok(ImgServerRequest::GetImage(get_image_request)) = serde_json::from_slice::<ImgServerRequest>(&body) {
-        match get_img(get_image_request, state) {
-            Ok(_) => todo!(),
-            Err(_) => todo!(),
+    if let Ok(ImgServerRequest::GetImage(uri)) =
+        serde_json::from_slice::<ImgServerRequest>(&body)
+    {
+        match get_img(uri, state) {
+            Ok(img_bytes) => send_http_json_response(StatusCode::OK, &img_bytes),
+            // TODO: Zena: Later: Use payload to send the image bytes instead of jsonified bytes...
+            Err(e) => send_http_json_response(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()),
         }
-        // TODO: send http responses based on type
     } else {
         match upload_img(state) {
-            Ok(_) => todo!(),
-            Err(_) => todo!(),
+            Ok(uri) => send_http_json_response(StatusCode::OK, &uri),
+            Err(e) => send_http_json_response(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()),
         }
-        // TODO: send http response
     }
 }
 
 fn handle_kinode_request(body: &[u8], state: &mut State) -> anyhow::Result<()> {
     let request: ImgServerRequest = serde_json::from_slice(body)?;
-    match request {
-        ImgServerRequest::UploadImage => {
-            match upload_img(state) {
-                Ok(_) => todo!(),
-                Err(_) => todo!(),
-            }
+    let response_body: ImgServerResponse = match request {
+        ImgServerRequest::UploadImage => match upload_img(state) {
+            Ok(uri) => ImgServerResponse::UploadImage(Ok(uri)),
+            Err(e) => ImgServerResponse::UploadImage(Err(e.to_string())),
         },
-        ImgServerRequest::GetImage(get_image_request) => {
-            match get_img(get_image_request, state) {
-                Ok(_) => todo!(),
-                Err(_) => todo!(),
-            }
+        ImgServerRequest::GetImage(get_image_request) => match get_img(get_image_request, state) {
+            Ok(img_bytes) => ImgServerResponse::GetImage(Ok(img_bytes)),
+            Err(e) => ImgServerResponse::GetImage(Err(e.to_string())),
         },
-    }
+    };
+
+    Ok(Response::new().body(response_body).send()?)
 }
 
 call_init!(init);

@@ -1,31 +1,21 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize, process_macros::SerdeJsonInto)]
 pub struct State {
     pub images: HashMap<URI, Vec<u8>>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, process_macros::SerdeJsonInto)]
 pub enum ImgServerRequest {
     UploadImage,
-    GetImage(GetImageRequest),
+    GetImage(URI),
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, process_macros::SerdeJsonInto)]
 pub enum ImgServerResponse {
-    UploadImage(UploadImageResponse),
-    GetImage,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct UploadImageResponse {
-    pub uri: URI,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct GetImageRequest {
-    pub uri: URI,
+    UploadImage(Result<URI, String>),
+    GetImage(Result<Vec<u8>, String>),
 }
 
 pub type URI = String;

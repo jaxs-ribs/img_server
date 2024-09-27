@@ -1,12 +1,10 @@
-use crate::structs::GetImageRequest;
 use crate::State;
 use crate::helpers;
 use crate::kiprintln;
 use crate::save_state;
 use crate::URI;
 
-pub fn get_img(get_image_request: GetImageRequest, state: &mut State) -> anyhow::Result<Vec<u8>> {
-    let uri = get_image_request.uri;
+pub fn get_img(uri: URI, state: &mut State) -> anyhow::Result<Vec<u8>> {
     Ok(state.images.get(&uri).cloned().ok_or(anyhow::anyhow!("Image not found"))?)
 }
 
