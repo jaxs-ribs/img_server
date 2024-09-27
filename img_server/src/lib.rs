@@ -1,6 +1,5 @@
 use anyhow::Result;
 
-use serde_json::Value;
 use kinode::process::standard::get_blob;
 use kinode_process_lib::{
     await_message, call_init, get_state,
@@ -9,6 +8,7 @@ use kinode_process_lib::{
     logging::{error, info, init_logging, Level},
     Address, Message, ProcessId, Response,
 };
+use serde_json::Value;
 use std::str::FromStr;
 
 pub mod helpers;
@@ -62,22 +62,25 @@ fn handle_http_server_request(body: Vec<u8>, state: &mut State) -> anyhow::Resul
             Err(e) => send_http_json_response(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()),
         }
     } else {
-        kiprintln!("Basic request");
-
-        let decoded_body = String::from_utf8(body).unwrap_or_else(|_| "Invalid UTF-8".to_string());
-        kiprintln!("Decoded request body: {}", decoded_body);
-        let json_body: Value = serde_json::from_str(&decoded_body)?;
-        if let Some(user_agent) = json_body["Http"]["headers"]["user-agent"].as_str() {
-            if user_agent != "iPhone-Shortcut/1.0" {
-                return Ok(());
-            }
-        }
-        kiprintln!("Uploading image");
-        match upload_img(state) {
-            Ok(uri) => send_http_json_response(StatusCode::OK, &uri),
-            Err(e) => send_http_json_response(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()),
-        }
+        Ok(())
     }
+    // } else {
+    //     kiprintln!("Basic request");
+
+    //     let decoded_body = String::from_utf8(body).unwrap_or_else(|_| "Invalid UTF-8".to_string());
+    //     kiprintln!("Decoded request body: {}", decoded_body);
+    //     let json_body: Value = serde_json::from_str(&decoded_body)?;
+    //     if let Some(user_agent) = json_body["Http"]["headers"]["user-agent"].as_str() {
+    //         if user_agent != "iPhone-Shortcut/1.0" {
+    //             return Ok(());
+    //         }
+    //     }
+    //     kiprintln!("Uploading image");
+    //     match upload_img(state) {
+    //         Ok(uri) => send_http_json_response(StatusCode::OK, &uri),
+    //         Err(e) => send_http_json_response(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()),
+    //     }
+    // }
 }
 
 fn handle_kinode_request(body: &[u8], state: &mut State) -> anyhow::Result<()> {

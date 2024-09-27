@@ -17,5 +17,3 @@ pub fn upload_img(state: &mut State) -> anyhow::Result<URI> {
     save_state(state)?;
     Ok(hash_hex)
 }
-
-// TODO: Responses
