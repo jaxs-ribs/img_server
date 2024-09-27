@@ -31,7 +31,7 @@ fn handle_message(_our: &Address, message: Message, state: &mut State) -> Result
 
     match message {
         Message::Request { body, source, .. } => handle_request(body, &source, state),
-        Message::Response { .. } => todo!(),
+        Message::Response { .. } => Ok(()),
     }
 }
 
