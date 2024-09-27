@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image Retriever</title>
+</head>
+<body>
+    <h1>Image Retriever</h1>
+    <input type="text" id="uriInput" placeholder="Enter image URI">
+    <button onclick="getImage()">Get Image</button>
+    <br><br>
+    <img id="retrievedImage" alt="Retrieved Image" style="max-width: 100%;">
+
+    <script>
+        async function getImage() {
+            const uri = document.getElementById('uriInput').value;
+            const url = 'https://recentered.hosting.uncentered.systems/img_server:img_server:uncentered.os/';
+
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ "GetImage": uri }),
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+                
+                // Create a Uint8Array from the received data
+                const uintArray = new Uint8Array(data);
+
+                // Create a Blob from the Uint8Array
+                const blob = new Blob([uintArray], {type: 'image/jpeg'});
+                const imageUrl = URL.createObjectURL(blob);
+
+                const img = document.getElementById('retrievedImage');
+                img.src = imageUrl;
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Failed to retrieve the image. Check the console for details.');
+            }
+        }
+    </script>
+</body>
+</html>

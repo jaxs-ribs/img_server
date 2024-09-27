@@ -1,5 +1,7 @@
 use anyhow::Result;
 
+use serde_json::Value;
+use kinode::process::standard::get_blob;
 use kinode_process_lib::{
     await_message, call_init, get_state,
     http::StatusCode,
@@ -44,15 +46,33 @@ fn handle_request(body: Vec<u8>, source: &Address, state: &mut State) -> Result<
 
 // TODO: Zena: We need to move this to hq and forward it this kinode
 fn handle_http_server_request(body: Vec<u8>, state: &mut State) -> anyhow::Result<()> {
-    if let Ok(ImgServerRequest::GetImage(uri)) =
-        serde_json::from_slice::<ImgServerRequest>(&body)
+    let bytes = get_blob()
+        .ok_or(anyhow::anyhow!("Failed to get blob"))?
+        .bytes;
+
+    if let Ok(ImgServerRequest::GetImage(uri)) = serde_json::from_slice::<ImgServerRequest>(&bytes)
     {
+        kiprintln!("Received a get image request");
         match get_img(uri, state) {
-            Ok(img_bytes) => send_http_json_response(StatusCode::OK, &img_bytes),
+            Ok(img_bytes) => {
+                kiprintln!("Sending image bytes");
+                send_http_json_response(StatusCode::OK, &img_bytes)
+            }
             // TODO: Zena: Later: Use payload to send the image bytes instead of jsonified bytes...
             Err(e) => send_http_json_response(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()),
         }
     } else {
+        kiprintln!("Basic request");
+
+        let decoded_body = String::from_utf8(body).unwrap_or_else(|_| "Invalid UTF-8".to_string());
+        kiprintln!("Decoded request body: {}", decoded_body);
+        let json_body: Value = serde_json::from_str(&decoded_body)?;
+        if let Some(user_agent) = json_body["Http"]["headers"]["user-agent"].as_str() {
+            if user_agent != "iPhone-Shortcut/1.0" {
+                return Ok(());
+            }
+        }
+        kiprintln!("Uploading image");
         match upload_img(state) {
             Ok(uri) => send_http_json_response(StatusCode::OK, &uri),
             Err(e) => send_http_json_response(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()),
@@ -82,7 +102,7 @@ fn init(our: Address) {
     init_logging(&our, Level::DEBUG, Level::INFO, None).unwrap();
     kiprintln!("begin1");
 
-    if let Err(e) = helpers::setup_http_server() {
+    if let Err(e) = helpers::setup_http_server(&our) {
         info!("Failed to start server: {}", e);
     }
 
