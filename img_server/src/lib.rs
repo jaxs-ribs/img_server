@@ -8,7 +8,6 @@ use kinode_process_lib::{
     logging::{error, info, init_logging, Level},
     Address, Message, ProcessId, Response,
 };
-use serde_json::Value;
 use std::str::FromStr;
 
 pub mod helpers;
@@ -45,7 +44,7 @@ fn handle_request(body: Vec<u8>, source: &Address, state: &mut State) -> Result<
 }
 
 // TODO: Zena: We need to move this to hq and forward it this kinode
-fn handle_http_server_request(body: Vec<u8>, state: &mut State) -> anyhow::Result<()> {
+fn handle_http_server_request(_body: Vec<u8>, state: &mut State) -> anyhow::Result<()> {
     let bytes = get_blob()
         .ok_or(anyhow::anyhow!("Failed to get blob"))?
         .bytes;
@@ -54,11 +53,10 @@ fn handle_http_server_request(body: Vec<u8>, state: &mut State) -> anyhow::Resul
     {
         kiprintln!("Received a get image request");
         match get_img(uri, state) {
-            Ok(img_bytes) => {
-                kiprintln!("Sending image bytes");
-                send_http_json_response(StatusCode::OK, &img_bytes)
+            Ok(img_base64) => {
+                kiprintln!("Sending image base64");
+                send_http_json_response(StatusCode::OK, &img_base64)
             }
-            // TODO: Zena: Later: Use payload to send the image bytes instead of jsonified bytes...
             Err(e) => send_http_json_response(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()),
         }
     } else {
@@ -91,7 +89,7 @@ fn handle_kinode_request(body: &[u8], state: &mut State) -> anyhow::Result<()> {
             Err(e) => ImgServerResponse::UploadImage(Err(e.to_string())),
         },
         ImgServerRequest::GetImage(get_image_request) => match get_img(get_image_request, state) {
-            Ok(img_bytes) => ImgServerResponse::GetImage(Ok(img_bytes)),
+            Ok(img_base64) => ImgServerResponse::GetImage(Ok(img_base64)),
             Err(e) => ImgServerResponse::GetImage(Err(e.to_string())),
         },
     };

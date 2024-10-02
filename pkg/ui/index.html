@@ -32,12 +32,11 @@
 
                 const data = await response.json();
                 
-                // Create a Uint8Array from the received data
-                const uintArray = new Uint8Array(data);
+                // The data is now a base64 encoded string
+                const base64Image = data;
 
-                // Create a Blob from the Uint8Array
-                const blob = new Blob([uintArray], {type: 'image/jpeg'});
-                const imageUrl = URL.createObjectURL(blob);
+                // Create the image URL directly from the base64 string
+                const imageUrl = `data:image/jpeg;base64,${base64Image}`;
 
                 const img = document.getElementById('retrievedImage');
                 img.src = imageUrl;

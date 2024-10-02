@@ -9,6 +9,7 @@ use kinode_process_lib::{
 };
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
+use base64::{engine::general_purpose, Engine as _};
 
 pub fn save_state(state: &State) -> anyhow::Result<()> {
     set_state(&serde_json::to_vec(state)?);
@@ -56,4 +57,13 @@ pub fn setup_http_server(our: &Address) -> Result<()> {
         .serve_ui(&our, "ui", vec!["/main.html"], http_config.clone())
         .expect("Failed to serve UI");
     Ok(())
+}
+
+pub fn encode_base64(data: &[u8]) -> String {
+    general_purpose::STANDARD.encode(data)
+}
+
+pub fn decode_base64(s: &str) -> Result<Vec<u8>> {
+    general_purpose::STANDARD.decode(s)
+        .map_err(|e| anyhow::anyhow!("Failed to decode base64: {}", e))
 }
